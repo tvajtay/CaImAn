@@ -34,10 +34,10 @@ def make_color_img(img, gain=255, out_type=np.uint8):
 
 # load estimates and movie image
 # base_folder = '/mnt/ceph/neuro/DataForPublications/DATA_PAPER_ELIFE/WEBSITE/'
-base_folder = '/Users/agiovannucci/SOFTWARE/CaImAn/YST/YST'
-mov = cm.load(os.path.join(base_folder,'Yr_d1_200_d2_256_d3_1_order_C_frames_3000_.mmap'))
-Cn = cm.load(os.path.join(base_folder,'projections/correlation_image.tif'))
-cnm_obj = load_CNMF(os.path.join(base_folder,'Yr_d1_200_d2_256_d3_1_order_C_frames_3000__cnmf_perf_web_after_analysis.hdf5'))
+base_folder = '/Users/agiovannucci/SOFTWARE/CaImAn/'
+mov = cm.load('/Users/agiovann/caiman_data/example_movies/memmap__d1_60_d2_80_d3_1_order_C_frames_2000_.mmap')
+Cn = cm.load('/Users/agiovann/caiman_data/example_movies/demoMovie_CN.tif')
+cnm_obj = load_CNMF('/Users/agiovann/caiman_data/example_movies/demoMovie.hdf5')
 estimates = cnm_obj.estimates
 estimates.restore_discarded_components()
 estimates.img_components = estimates.A.toarray().reshape((estimates.dims[0], estimates.dims[1],-1), order='F').transpose([2,0,1])
