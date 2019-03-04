@@ -1,5 +1,6 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 import numpy as np
 import caiman as cm
 from caiman.source_extraction.cnmf.cnmf import load_CNMF
@@ -60,13 +61,25 @@ def draw_contours():
     contours = [cv2.findContours(cv2.threshold(img, np.int(thrshcomp_line.value()), 255, 0)[1], cv2.RETR_TREE,
                                  cv2.CHAIN_APPROX_SIMPLE)[1] for img in estimates.img_components[estimates.idx_components]]
     bkgr_contours = estimates.background_image.copy()
+    SNRs = np.array(estimates.r_values)
+    iidd = np.array(estimates.idx_components)
+    idx1 = np.where(SNRs[iidd]<0.1)[0]
+    idx2 = np.where((SNRs[iidd]>=0.1) & 
+                    (SNRs[iidd]<0.25))[0]
+    idx3 = np.where((SNRs[iidd]>=0.25) & 
+                    (SNRs[iidd]<0.5))[0]
+    idx4 = np.where((SNRs[iidd]>=0.5) & 
+                    (SNRs[iidd]<0.75))[0]
+    idx5 = np.where((SNRs[iidd]>=0.75) & 
+                    (SNRs[iidd]<0.9))[0]
+    idx6 = np.where(SNRs[iidd]>=0.9)[0]
 
-    cv2.drawContours(bkgr_contours, sum(contours[0::6], []), -1, (255, 0, 0), 1)
-    cv2.drawContours(bkgr_contours, sum(contours[1::6], []), -1, (0, 255, 0), 1)
-    cv2.drawContours(bkgr_contours, sum(contours[2::6], []), -1, (0, 0, 255), 1)
-    cv2.drawContours(bkgr_contours, sum(contours[3::6], []), -1, (255, 255, 0), 1)
-    cv2.drawContours(bkgr_contours, sum(contours[4::6], []), -1, (255, 0, 255), 1)
-    cv2.drawContours(bkgr_contours, sum(contours[5::6], []), -1, (0, 255, 255), 1)
+    cv2.drawContours(bkgr_contours, sum([contours[jj] for jj in idx1], []), -1, (255, 0, 0), 1)
+    cv2.drawContours(bkgr_contours, sum([contours[jj] for jj in idx2], []), -1, (0, 255, 0), 1)
+    cv2.drawContours(bkgr_contours, sum([contours[jj] for jj in idx3], []), -1, (0, 0, 255), 1)
+    cv2.drawContours(bkgr_contours, sum([contours[jj] for jj in idx4], []), -1, (255, 255, 0), 1)
+    cv2.drawContours(bkgr_contours, sum([contours[jj] for jj in idx5], []), -1, (255, 0, 255), 1)
+    cv2.drawContours(bkgr_contours, sum([contours[jj] for jj in idx6], []), -1, (0, 255, 255), 1)
     img.setImage(bkgr_contours, autoLevels=False)
 # Interpret image data as row-major instead of col-major
 # pg.setConfigOptions(imageAxisOrder='row-major')
@@ -75,6 +88,8 @@ pg.mkQApp()
 win = pg.GraphicsLayoutWidget()
 win.setWindowTitle('pyqtgraph example: Image Analysis')
 
+
+#pars_pane = win.addItem(pars)
 # A plot area (ViewBox + axes) for displaying the image
 p1 = win.addPlot(title="Image here")
 
@@ -121,35 +136,54 @@ win.addItem(hist_SNR)
 
 
 
-
-def changed_quality_metrics(event):
-    global estimates, cnm_obj, event_
+def changed_quality_metrics_cnn(event):
+    global estimates, cnm_obj
     params = cnm_obj.params
-
-    if event.objectName() == 'metric_CNN':
-        cnn_lowest, min_cnn_thr = event.getLevels()
-        params.quality.update({'cnn_lowest': cnn_lowest,'min_cnn_thr': min_cnn_thr})
-    elif event.objectName() == 'metric_SNR':
-        SNR_lowest, min_SNR = event.getLevels()
-        params.quality.update({'SNR_lowest': SNR_lowest, 'min_SNR': min_SNR})
-    elif event.objectName() == 'metric_rval':
-        rval_lowest, rval_thr = event.getLevels()
-        params.quality.update({'rval_lowest': rval_lowest,'rval_thr': rval_thr})
-    else:
-        raise Exception('Unknown Metric Object')
+    cnn_lowest, min_cnn_thr = event.getLevels()
+    params.quality.update({'cnn_lowest': cnn_lowest,'min_cnn_thr': min_cnn_thr})
     estimates.filter_components(mov, params, dview=None)
-
-    # selected_components = np.where(estimates.cnn_preds >= low_cnn)[0]
-    # discarded_components = np.where(estimates.cnn_preds <= low_cnn)[0]
-    # estimates.idx_components = np.setdiff1d(selected_components, discarded_components)
     draw_contours()
 
+def changed_quality_metrics_SNR(event):
+    global estimates, cnm_obj
+    params = cnm_obj.params
+    SNR_lowest, min_SNR = event.getLevels()
+    params.quality.update({'SNR_lowest': SNR_lowest, 'min_SNR': min_SNR})
+    estimates.filter_components(mov, params, dview=None)
+    draw_contours()
+    
+def changed_quality_metrics_rval(event):
+    global estimates, cnm_obj, win
+    params = cnm_obj.params
+    rval_lowest, rval_thr = event.getLevels()
+    params.quality.update({'rval_lowest': rval_lowest,'rval_thr': rval_thr})
+    estimates.filter_components(mov, params, dview=None)
+    draw_contours()    
+    
 
-hist_cnn.sigLevelsChanged.connect(changed_quality_metrics)
-hist_rval.sigLevelsChanged.connect(changed_quality_metrics)
-hist_SNR.sigLevelsChanged.connect(changed_quality_metrics)
+#def changed_quality_metrics(event):
+#    global estimates, cnm_obj, event_
+#    params = cnm_obj.params
+#
+#    if event.objectName() == 'metric_CNN':
+#        print('Wring')
+#    elif event.objectName() == 'metric_SNR':
+#        
+#    elif event.objectName() == 'metric_rval':
+#        
+#    else:
+#        raise Exception('Unknown Metric Object')
+#    estimates.filter_components(mov, params, dview=None)
+#
+#    # selected_components = np.where(estimates.cnn_preds >= low_cnn)[0]
+#    # discarded_components = np.where(estimates.cnn_preds <= low_cnn)[0]
+#    # estimates.idx_components = np.setdiff1d(selected_components, discarded_components)
+#    draw_contours()
 
 
+hist_cnn.sigLevelsChanged.connect(changed_quality_metrics_cnn)
+hist_rval.sigLevelsChanged.connect(changed_quality_metrics_rval)
+hist_SNR.sigLevelsChanged.connect(changed_quality_metrics_SNR)
 
 
 # Draggable line for setting isocurve level
@@ -227,7 +261,7 @@ def mouseClickEvent(event):
     distances = np.sum(((x,y)-estimates.cms[estimates.idx_components])**2, axis=1)**0.5
     min_dist_comp = np.argmin(distances)
     estimates.components_to_plot = estimates.idx_components[min_dist_comp]
-    p2.plot(estimates.C[estimates.components_to_plot], clear=True)
+    p2.plot(estimates.C[estimates.components_to_plot] + estimates.R[estimates.components_to_plot], clear=True)
     p1.setTitle("pos: (%0.1f, %0.1f)  component: %d  value: %g dist:%f" % (x, y, estimates.components_to_plot,
                                                                            val, distances[min_dist_comp]))
 p1.vb.mouseClickEvent = mouseClickEvent
