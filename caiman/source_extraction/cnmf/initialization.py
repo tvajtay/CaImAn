@@ -34,6 +34,7 @@ from skimage.transform import resize as resize_sk
 from sklearn.decomposition import NMF, FastICA
 from sklearn.utils.extmath import randomized_svd, squared_norm
 import sys
+from typing import List
 
 import caiman
 from .deconvolution import constrained_foopsi
@@ -686,10 +687,10 @@ def finetune(Y, cin, nIter=5):
 
     Args:
         Y:  D1*d2*T*K patches
-    
+
         c: array T*K
             the inital calcium traces
-    
+
         nIter: int
             True indicates that time is listed in the last axis of Y (matlab format)
             and moves it in the front
@@ -1609,12 +1610,21 @@ def compute_W(Y, A, C, dims, radius, data_fits_in_memory=True, ssub=1, tsub=1):
         if ssub == 1 and tsub == 1:
             X = Y - A.dot(C) - b0[:, None]
         else:
-            X = downscale(ds(Y), (1, tsub)) - \
-                (ds(A).dot(downscale(C, (1, tsub))) if A.size > 0 else 0) - \
-                ds(b0).reshape((-1, 1), order='F')
+            X = downscale(Y.reshape(dims + (-1,), order='F'),
+                          (ssub, ssub, tsub)).reshape((-1, (T - 1) // tsub + 1), order='F') - \
+                (downscale(A.reshape(dims + (-1,), order='F'),
+                           (ssub, ssub, 1)).reshape((-1, len(C)), order='F').dot(
+                    downscale(C, (1, tsub))) if A.size > 0 else 0) - \
+                downscale(b0.reshape(dims, order='F'),
+                          (ssub, ssub)).reshape((-1, 1), order='F')
 
-        def process_pixel(p):
-            index = get_indices_of_pixels_on_ring(p)
+    indices:List = []
+    data:List = []
+    indptr = [0]
+    for p in range(d1*d2):
+        index = get_indices_of_pixels_on_ring(p)
+        indices += list(index)
+        if data_fits_in_memory:
             B = X[index]
             tmp = np.array(B.dot(B.T))
             tmp[np.diag_indices(len(tmp))] += np.trace(tmp) * 1e-5
