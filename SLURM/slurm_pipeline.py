@@ -204,11 +204,18 @@ def main():
                                'min_cnn_thr': cnn_thr,
                                'cnn_lowest': cnn_lowest})
     cnm2.estimates.evaluate_components(images, cnm2.params, dview=dview)
+    #%% Extract DF/F values
+    cnm2.estimates.detrend_df_f(quantileMin=8, frames_window=250)
 
     #%% update object with selected components
     cnm2.estimates.select_components(use_object=True)
-    #%% Extract DF/F values
-    cnm2.estimates.detrend_df_f(quantileMin=8, frames_window=250)
+
+    # %% plot contours of found components
+    Cn = cm.local_correlations(images, swap_dim=False)
+    Cn[np.isnan(Cn)] = 0
+    cnm2.estimates.plot_contours(img=Cn, idx=cnm2.estimates.idx_components, display_numbers=True)
+    plt.title(Path(args.in_file).stem)
+    plt.savefig(Path(args.in_file).stem + '.png', dpi=200)
 
     #Using Path we get the base name of the video and use the same name for H5
     sname = Path(args.in_file).stem + '.hdf5'
