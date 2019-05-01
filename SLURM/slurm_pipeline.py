@@ -6,10 +6,6 @@ CaImAn batch algorithm. The processing pipeline included motion correction,
 source extraction and deconvolution. The demo shows how to construct the
 params, MotionCorrect and cnmf objects and call the relevant functions. You
 can also run a large part of the pipeline with a single method (cnmf.fit_file)
-See inside for details.
-
-Demo is also available as a jupyter notebook (see demo_pipeline.ipynb)
-Dataset couresy of Sue Ann Koay and David Tank (Princeton University)
 
 This demo pertains to two photon data. For a complete analysis pipeline for
 one photon microendoscopic data see demo_pipeline_cnmfE.py
@@ -67,7 +63,7 @@ logging.basicConfig(format=
 def main():
     pass  # For compatibility between running under Spyder and the CLI
 
-#%% Select file(s) to be processed (download if not present)
+#%% Select file from input arguments
     fnames = args.in_file  # filename to be processed from argparse
 
 #%% First setup some parameters for data and motion correction
@@ -75,7 +71,7 @@ def main():
     # dataset dependent parameters
     fr = 15.49             # imaging rate in frames per second
     decay_time = 0.4    # length of a typical transient in seconds
-    dxy = (2., 2.)      # spatial resolution in x and y in (um per pixel)
+    dxy = (1.5, 1.5)      # spatial resolution in x and y in (um per pixel)
     # note the lower than usual spatial resolution here
     max_shift_um = (12., 12.)       # maximum shift in um
     patch_motion_um = (100., 100.)  # patch size for non-rigid correction in um
@@ -142,15 +138,16 @@ def main():
     p = 1                    # order of the autoregressive system
     gnb = 2                  # number of global background components
     merge_thr = 0.85         # merging threshold, max correlation allowed
-    rf = 15
-    # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
+    rf = 15                  # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
     stride_cnmf = 6          # amount of overlap between the patches in pixels
     K = 4                    # number of components per patch
     gSig = [5, 5]            # expected half size of neurons in pixels
-    # initialization method (if analyzing dendritic data using 'sparse_nmf')
-    method_init = 'greedy_roi'
+    method_init = 'greedy_roi'   # initialization method (if analyzing dendritic data using 'sparse_nmf')
     ssub = 2                     # spatial subsampling during initialization
     tsub = 2                     # temporal subsampling during intialization
+    s_min = -10                   # minimum signal amplitude needed in order for a transient to be considered as activity
+    min_size_neuro = 0.1*gSig[0]*np.pi**2
+    max_size_neuro = 2.5*gSig[0]*np.pi**2
 
     # parameters for component evaluation
     opts_dict = {'fnames': fnames,
@@ -166,13 +163,16 @@ def main():
                  'n_processes': n_processes,
                  'only_init': True,
                  'ssub': ssub,
-                 'tsub': tsub}
+                 'tsub': tsub,
+                 's_min': s_min,
+                 'min_size_neuro': min_size_neuro,
+                 'max_size_neuro': max_size_neuro}
 
     opts.change_params(params_dict=opts_dict)
+
 # %% RUN CNMF ON PATCHES
     # First extract spatial and temporal components on patches and combine them
     # for this step deconvolution is turned off (p=0)
-
     opts.change_params({'p': 0})
     cnm = cnmf.CNMF(n_processes, params=opts, dview=dview)
     cnm = cnm.fit(images)
@@ -203,12 +203,17 @@ def main():
                                'use_cnn': True,
                                'min_cnn_thr': cnn_thr,
                                'cnn_lowest': cnn_lowest})
+
     cnm2.estimates.evaluate_components(images, cnm2.params, dview=dview)
+
     #%% Extract DF/F values
     cnm2.estimates.detrend_df_f(quantileMin=8, frames_window=250)
 
     #%% update object with selected components
     cnm2.estimates.select_components(use_object=True)
+
+    cnm2.estimates.threshold_spatial_components(maxthr=0.25)
+    cnm2.estimates.remove_small_large_neurons(min_size_neuro=min_size_neuro, max_size_neuro=max_size_neuro)
 
     # %% plot contours of found components
     Cn = cm.local_correlations(images, swap_dim=False)

@@ -181,7 +181,7 @@ class Estimates(object):
             img = np.reshape(np.array(self.A.mean(1)), self.dims, order='F')
         if self.coordinates is None:  # not hasattr(self, 'coordinates'):
             self.coordinates = caiman.utils.visualization.get_contours(self.A, self.dims, thr=thr, thr_method=thr_method)
-        plt.figure()   
+        plt.figure()
         if params is not None:
             plt.suptitle('min_SNR=%1.2f, rval_thr=%1.2f, use_cnn=%i'
                          %(params.quality['SNR_lowest'],
@@ -960,7 +960,7 @@ class Estimates(object):
                 set) of components, then use a list with a single (list)
                 element
             params: params object
-                
+
         Returns:
             self: estimates object
         '''
@@ -998,7 +998,7 @@ class Estimates(object):
             g_idx = [merged_ROI[indx]]
             fast_merge = True
             bm, cm, computedA, computedC, gm, \
-            sm, ss = merge_iteration(Acsc, C_to_norm, Ctmp, fast_merge, 
+            sm, ss = merge_iteration(Acsc, C_to_norm, Ctmp, fast_merge,
                                      None, g_idx, indx, params.temporal)
 
             A_merged[:, i] = computedA
@@ -1174,4 +1174,3 @@ def compare_components(estimate_gt, estimate_cmp,  Cn=None, thresh_cost=.8, min_
         plot_results=plot_results, Cn=Cn, labels=labels)
 
     return tp_gt, tp_comp, fn_gt, fp_comp, performance_cons_off
-
