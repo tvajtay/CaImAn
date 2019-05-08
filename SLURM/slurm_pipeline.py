@@ -22,6 +22,7 @@ import numpy as np
 import os
 import argparse
 from pathlib import Path
+import imageio
 
 #Set up argparse to take filename as CLI argument and then store as the 'in_file' component of args
 parser = argparse.ArgumentParser(description='Video filename and location')
@@ -202,7 +203,8 @@ def main():
                                'rval_thr': rval_thr,
                                'use_cnn': True,
                                'min_cnn_thr': cnn_thr,
-                               'cnn_lowest': cnn_lowest})
+                               'cnn_lowest': cnn_lowest,
+                               's_min': s_min})
 
     cnm2.estimates.evaluate_components(images, cnm2.params, dview=dview)
 
@@ -212,7 +214,7 @@ def main():
     #%% update object with selected components
     cnm2.estimates.select_components(use_object=True)
 
-    cnm2.estimates.threshold_spatial_components(maxthr=0.25)
+    cnm2.estimates.threshold_spatial_components(maxthr=0.5)
     cnm2.estimates.remove_small_large_neurons(min_size_neuro=min_size_neuro, max_size_neuro=max_size_neuro)
 
     # %% plot contours of found components
@@ -220,7 +222,7 @@ def main():
     Cn[np.isnan(Cn)] = 0
     cnm2.estimates.plot_contours(img=Cn, idx=cnm2.estimates.idx_components, display_numbers=True)
     plt.title(Path(args.in_file).stem)
-    plt.savefig(Path(args.in_file).stem + '.png', dpi=200)
+    plt.savefig(Path(args.in_file).stem + '.png', dpi=400)
 
     #Using Path we get the base name of the video and use the same name for H5
     sname = Path(args.in_file).stem + '.hdf5'
@@ -232,6 +234,14 @@ def main():
     log_files = glob.glob('*_LOG_*')
     for log_file in log_files:
         os.remove(log_file)
+
+    #Create denoised video as matrix
+    denoised = cm.movie(cnm2.estimates.A.dot(cnm2.estimates.C) + \
+                    cnm2.estimates.b.dot(cnm2.estimates.f)).reshape(dims + (-1,), order='F').transpose([2, 0, 1])
+
+    #Saving a denoised gif of the analyzed video
+    sname = Path(args.in_file).stem + '.gif'
+    imageio.mimwrite(sname,denoised, fps=15.49)
 
 # %%
 # This is to mask the differences between running this demo in Spyder

@@ -2,17 +2,17 @@
 
 #SBATCH --partition=main             # Partition (job queue)
 #SBATCH --no-requeue                 # Do not re-run job  if preempted
-#SBATCH --job-name=caiman_elena      # Assign an short name to your job
+#SBATCH --job-name=caiman_naomi      # Assign an short name to your job
 #SBATCH --nodes=1                    # Number of nodes you require
 #SBATCH --ntasks=1                   # Total # of tasks across all nodes
-#SBATCH --cpus-per-task=20           # Number of requested cores
+#SBATCH --cpus-per-task=40           # Number of requested cores
 #SBATCH --mem=120000                  # Real memory (RAM) required (MB)
-#SBATCH --time=10:00:00              # Total run time limit (HH:MM:SS)
+#SBATCH --time=30:00:00              # Total run time limit (HH:MM:SS)
 #SBATCH --output=slurm.%N.%j.out     # STDOUT output file
 #SBATCH --error=slurm.%N.%j.err      # STDERR output file (optional)
 #SBATCH --export=ALL                 # Export your current env to the job env
 
-WORKING_DIRECTORY='/scratch/tjv55/elena_tbi' # !!! You need to change this to the parent directory
+WORKING_DIRECTORY='/scratch/tjv55' # !!! You need to change this to the parent directory
 cd $WORKING_DIRECTORY  # go to the parent directory
 source activate caiman #Activate your anaconda environment you have installed
 
