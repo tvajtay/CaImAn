@@ -146,7 +146,7 @@ def main():
     method_init = 'greedy_roi'   # initialization method (if analyzing dendritic data using 'sparse_nmf')
     ssub = 2                     # spatial subsampling during initialization
     tsub = 2                     # temporal subsampling during intialization
-    s_min = -10                   # minimum signal amplitude needed in order for a transient to be considered as activity
+    s_min = -100                   # minimum signal amplitude needed in order for a transient to be considered as activity
     min_size_neuro = 0.1*gSig[0]*np.pi**2
     max_size_neuro = 2.5*gSig[0]*np.pi**2
 
@@ -165,9 +165,9 @@ def main():
                  'only_init': True,
                  'ssub': ssub,
                  'tsub': tsub,
-                 's_min': s_min,
                  'min_size_neuro': min_size_neuro,
-                 'max_size_neuro': max_size_neuro}
+                 'max_size_neuro': max_size_neuro,
+                 's_min': s_min}
 
     opts.change_params(params_dict=opts_dict)
 
@@ -196,15 +196,14 @@ def main():
     min_SNR = 2  # signal to noise ratio for accepting a component
     rval_thr = 0.85  # space correlation threshold for accepting a component
     cnn_thr = 0.99  # threshold for CNN based classifier
-    cnn_lowest = 0.1 # neurons with cnn probability lower than this value are rejected
+    cnn_lowest = 0.2 # neurons with cnn probability lower than this value are rejected
 
     cnm2.params.set('quality', {'decay_time': decay_time,
                                'min_SNR': min_SNR,
                                'rval_thr': rval_thr,
                                'use_cnn': True,
                                'min_cnn_thr': cnn_thr,
-                               'cnn_lowest': cnn_lowest,
-                               's_min': s_min})
+                               'cnn_lowest': cnn_lowest})
 
     cnm2.estimates.evaluate_components(images, cnm2.params, dview=dview)
 
@@ -212,9 +211,9 @@ def main():
     cnm2.estimates.detrend_df_f(quantileMin=8, frames_window=250)
 
     #%% update object with selected components
-    cnm2.estimates.select_components(use_object=True)
+    #cnm2.estimates.select_components(use_object=True)
 
-    cnm2.estimates.threshold_spatial_components(maxthr=0.5)
+    cnm2.estimates.threshold_spatial_components(maxthr=0.3)
     cnm2.estimates.remove_small_large_neurons(min_size_neuro=min_size_neuro, max_size_neuro=max_size_neuro)
 
     # %% plot contours of found components
@@ -238,7 +237,7 @@ def main():
     #Create denoised video as matrix
     denoised = cm.movie(cnm2.estimates.A.dot(cnm2.estimates.C) + \
                     cnm2.estimates.b.dot(cnm2.estimates.f)).reshape(dims + (-1,), order='F').transpose([2, 0, 1])
-
+    denoised = np.uint8(denoised)
     #Saving a denoised gif of the analyzed video
     sname = Path(args.in_file).stem + '.gif'
     imageio.mimwrite(sname,denoised, fps=15.49)
