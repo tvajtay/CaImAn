@@ -5,8 +5,8 @@
 #SBATCH --job-name=caiman_naomi      # Assign an short name to your job
 #SBATCH --nodes=1                    # Number of nodes you require
 #SBATCH --ntasks=1                   # Total # of tasks across all nodes
-#SBATCH --cpus-per-task=40           # Number of requested cores
-#SBATCH --mem=120000                  # Real memory (RAM) required (MB)
+#SBATCH --cpus-per-task=15           # Number of requested cores
+#SBATCH --mem=60000                  # Real memory (RAM) required (MB)
 #SBATCH --time=30:00:00              # Total run time limit (HH:MM:SS)
 #SBATCH --output=slurm.%N.%j.out     # STDOUT output file
 #SBATCH --error=slurm.%N.%j.err      # STDERR output file (optional)
