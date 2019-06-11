@@ -964,10 +964,9 @@ def plot_contours(A, Cn, thr=None, thr_method='max', maxthr=0.2, nrgthr=0.9, dis
             max_number = A.shape[1]
         for i in range(np.minimum(nr, max_number)):
             if swap_dim:
-                ax.text(cm[i, 0], cm[i, 1], str(i + 1), color=colors, **number_args)
+                ax.text(cm[i, 0], cm[i, 1], str(i + 1), color='r', **number_args)
             else:
-                ax.text(cm[i, 1], cm[i, 0], str(i + 1), color=colors, **number_args)
->>>>>>> Merge, and visualization.py conflict resolution.
+                ax.text(cm[i, 1], cm[i, 0], str(i + 1), color='r', **number_args)
     return coordinates
 
 def plot_shapes(Ab, dims, num_comps=15, size=(15, 15), comps_per_row=None,
