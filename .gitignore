@@ -17,7 +17,7 @@ Icon
 ._*
 *.log
 *.err
-*.*.out 
+*.*.out
 
 # Files that might appear in the root of a volume
 .DocumentRevisions-V100
@@ -52,6 +52,7 @@ __pycache__/
 # C extensions
 *.so
 *.c
+*.cpp
 
 #movie tif
 *.tif
@@ -178,6 +179,8 @@ docs/html/*
 
 #generated data from caiman
 /data_storage
+*.png
+*.avi
 
 # Recycle Bin used on file shares
 $RECYCLE.BIN/
