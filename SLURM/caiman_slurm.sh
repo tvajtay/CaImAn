@@ -10,7 +10,7 @@
 #SBATCH --job-name=caiman_naomi      # Assign an short name to your job
 #SBATCH --nodes=1                    # Number of nodes you require
 #SBATCH --ntasks=1                   # Total # of tasks across all nodes
-#SBATCH --cpus-per-task=15           # Number of requested cores (Max @ Rutgers 30/node)
+#SBATCH --cpus-per-task=15           # Number of requested CPU's (Max @ Rutgers 30/node)
 #SBATCH --mem=60000                  # Real memory (RAM) required (MB) (Max @ Rutgers is 120000/node)
 #SBATCH --time=30:00:00              # Total run time limit (HH:MM:SS)
 #SBATCH --output=slurm.%N.%j.out     # STDOUT output file
@@ -33,6 +33,6 @@ export OPENBLAS_NUM_THREADS=1
 find -type f -name *.tif -execdir python /home/tjv55/slurm_pipeline.py {} \;
 
 #The following would be the variation of the previous command if you didn't want to include
-#the parent directory itself in the search just the sub-directories.
+#the parent directory itself and search just the sub-directories.
 
 #find . -type f -name *.tif -execdir python /home/tomi/CaImAn/SLURM/slurm_pipeline.py {} \;

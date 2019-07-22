@@ -22,10 +22,8 @@ a AVI of the denoised components.
 
 import cv2
 import glob
-import logging
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import argparse
 from pathlib import Path
 import imageio
@@ -54,17 +52,6 @@ import caiman as cm
 from caiman.motion_correction import MotionCorrect
 from caiman.source_extraction.cnmf import cnmf as cnmf
 from caiman.source_extraction.cnmf import params as params
-
-# %%
-# Set up the logger (optional); change this if you like.
-# You can log to a file using the filename parameter, or make the output more
-# or less verbose by setting level to logging.DEBUG, logging.INFO,
-# logging.WARNING, or logging.ERROR
-
-logging.basicConfig(format=
-                    "%(relativeCreated)12d [%(filename)s:%(funcName)20s():%(lineno)s]"\
-                    "[%(process)d] %(message)s",
-                    level=logging.INFO)
 
 #%%
 def main():
@@ -128,7 +115,7 @@ def main():
     # the boundaries
 
     # memory map the file in order 'C'
-    fname_new = cm.save_memmap(mc.mmap_file, base_name='memmap_', order='C',
+    fname_new = cm.save_memmap(mc.mmap_file, base_name=fnames[0] + '_memmap_', order='C',
                                border_to_0=border_to_0)  # exclude borders
 
     # now load the file
@@ -153,8 +140,6 @@ def main():
     ssub = 2                     # spatial subsampling during initialization
     tsub = 2                     # temporal subsampling during intialization
     s_min = -100                   # minimum signal amplitude needed in order for a transient to be considered as activity
-    min_size_neuro = 0.1*gSig[0]*np.pi**2
-    max_size_neuro = 2.5*gSig[0]*np.pi**2
 
     # parameters for component evaluation
     opts_dict = {'fnames': fnames,
@@ -171,8 +156,6 @@ def main():
                  'only_init': True,
                  'ssub': ssub,
                  'tsub': tsub,
-                 'min_size_neuro': min_size_neuro,
-                 'max_size_neuro': max_size_neuro,
                  's_min': s_min}
 
     opts.change_params(params_dict=opts_dict)
@@ -199,17 +182,21 @@ def main():
     #   a) the shape of each component must be correlated with the data
     #   b) a minimum peak SNR is required over the length of a transient
     #   c) each shape passes a CNN based classifier
-    min_SNR = 2  # signal to noise ratio for accepting a component
+    min_SNR = 2  # Overall minimum signal to noise ratio for accepting a component
     rval_thr = 0.85  # space correlation threshold for accepting a component
     cnn_thr = 0.99  # threshold for CNN based classifier
     cnn_lowest = 0.2 # neurons with cnn probability lower than this value are rejected
+    min_size_neuro = 0.1*gSig[0]*np.pi**2
+    max_size_neuro = 2.5*gSig[0]*np.pi**2
 
     cnm2.params.set('quality', {'decay_time': decay_time,
                                'min_SNR': min_SNR,
                                'rval_thr': rval_thr,
                                'use_cnn': True,
                                'min_cnn_thr': cnn_thr,
-                               'cnn_lowest': cnn_lowest})
+                               'cnn_lowest': cnn_lowest,
+                               'min_size_neuro': min_size_neuro,
+                               'max_size_neuro': max_size_neuro,})
 
     cnm2.estimates.evaluate_components(images, cnm2.params, dview=dview)
 
@@ -217,17 +204,17 @@ def main():
     cnm2.estimates.detrend_df_f(quantileMin=8, frames_window=250)
 
     #%% update object with selected components
-    #cnm2.estimates.select_components(use_object=True)
+    cnm2.estimates.select_components(use_object=True)
 
-    cnm2.estimates.threshold_spatial_components(maxthr=0.3)
-    cnm2.estimates.remove_small_large_neurons(min_size_neuro=min_size_neuro, max_size_neuro=max_size_neuro)
+    #cnm2.estimates.threshold_spatial_components(maxthr=0.85)
+    #cnm2.estimates.remove_small_large_neurons(min_size_neuro=min_size_neuro, max_size_neuro=max_size_neuro)
 
     # %% plot contours of found components
-    Cn = cm.local_correlations(images, swap_dim=False)
-    Cn[np.isnan(Cn)] = 0
-    cnm2.estimates.plot_contours(img=Cn, idx=cnm2.estimates.idx_components, display_numbers=True)
-    plt.title(Path(args.in_file).stem)
-    plt.savefig(Path(args.in_file).stem + '.png', dpi=400)
+    #Cn = cm.local_correlations(images, swap_dim=False)
+    #Cn[np.isnan(Cn)] = 0
+    #cnm2.estimates.plot_contours(img=Cn, idx=cnm2.estimates.idx_components, display_numbers=True)
+    #plt.title(Path(args.in_file).stem)
+    #plt.savefig(Path(args.in_file).stem + '.png', dpi=400)
 
     #Using Path we get the base name of the video and use the same name for H5
     sname = Path(args.in_file).stem + '.hdf5'
@@ -236,9 +223,6 @@ def main():
 
     #%% STOP CLUSTER and clean up log files
     cm.stop_server(dview=dview)
-    log_files = glob.glob('*_LOG_*')
-    for log_file in log_files:
-        os.remove(log_file)
 
     #Create denoised video as matrix
     denoised = cm.movie(cnm2.estimates.A.dot(cnm2.estimates.C) + \
