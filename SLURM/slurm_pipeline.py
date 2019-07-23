@@ -20,13 +20,17 @@ a AVI of the denoised components.
 @tvajtay
 """
 
-import cv2
-import glob
-import matplotlib.pyplot as plt
-import numpy as np
-import argparse
+
 from pathlib import Path
+import argparse
+import numpy as np
 import imageio
+import cv2
+from caiman.motion_correction import MotionCorrect
+from caiman.source_extraction.cnmf import cnmf
+from caiman.source_extraction.cnmf import params
+import caiman as cm
+
 
 #Set up argparse to take filename as CLI argument and then store as the 'in_file' component of args
 parser = argparse.ArgumentParser(description='Video filename and location')
@@ -48,14 +52,8 @@ except NameError:
     pass
 
 
-import caiman as cm
-from caiman.motion_correction import MotionCorrect
-from caiman.source_extraction.cnmf import cnmf as cnmf
-from caiman.source_extraction.cnmf import params as params
-
 #%%
 def main():
-    pass  # For compatibility between running under Spyder and the CLI
 
 #%% Select file from input arguments
     fnames = args.in_file  # filename to be processed from argparse
@@ -115,7 +113,7 @@ def main():
     # the boundaries
 
     # memory map the file in order 'C'
-    fname_new = cm.save_memmap(mc.mmap_file, base_name=fnames[0] + '_memmap_', order='C',
+    fname_new = cm.save_memmap(mc.mmap_file, base_name='_memmap_', order='C',
                                border_to_0=border_to_0)  # exclude borders
 
     # now load the file
@@ -200,22 +198,19 @@ def main():
 
     cnm2.estimates.evaluate_components(images, cnm2.params, dview=dview)
 
+    #%% update object with selected components
+    cnm2.estimates.select_components(use_object=True)
+
     #%% Extract DF/F values
     cnm2.estimates.detrend_df_f(quantileMin=8, frames_window=250)
 
-    #%% update object with selected components
-    cnm2.estimates.select_components(use_object=True)
 
     #cnm2.estimates.threshold_spatial_components(maxthr=0.85)
     #cnm2.estimates.remove_small_large_neurons(min_size_neuro=min_size_neuro, max_size_neuro=max_size_neuro)
 
-    # %% plot contours of found components
+    # %% Generate heat image of video and save data
     Cn = cm.local_correlations(images, swap_dim=False)
     Cn[np.isnan(Cn)] = 0
-    cnm2.estimates.plot_contours(img=Cn, idx=cnm2.estimates.idx_components, display_numbers=True)
-    plt.title(Path(args.in_file).stem)
-    plt.savefig(Path(args.in_file).stem + '.png', dpi=400)
-
     cnm2.estimates.Cn = Cn
     cnm2.save(cnm2.mmap_file[:-4] + 'hdf5')
 

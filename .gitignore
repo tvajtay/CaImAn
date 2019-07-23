@@ -57,6 +57,11 @@ __pycache__/
 #movie tif
 *.tif
 
+#generated data from caiman
+/data_storage
+*.png
+*.avi
+
 # Distribution / packaging
 *__LOG_*
 .Python
@@ -176,12 +181,6 @@ caiman/tests/comparison/tests/
 #htmls
 docs/html/*
 
-
-#generated data from caiman
-/data_storage
-*.png
-*.avi
-
 # Recycle Bin used on file shares
 $RECYCLE.BIN/
 
@@ -193,5 +192,8 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# VScode settings
+*.vscode
 
 # End of https://www.gitignore.io/api/macos,python,windows
