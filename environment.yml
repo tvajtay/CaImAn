@@ -15,7 +15,6 @@ dependencies:
 - mypy
 - nose
 - numpy
-- oasis
 - opencv
 - peakutils
 - pims

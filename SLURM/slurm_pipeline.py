@@ -210,15 +210,14 @@ def main():
     #cnm2.estimates.remove_small_large_neurons(min_size_neuro=min_size_neuro, max_size_neuro=max_size_neuro)
 
     # %% plot contours of found components
-    #Cn = cm.local_correlations(images, swap_dim=False)
-    #Cn[np.isnan(Cn)] = 0
-    #cnm2.estimates.plot_contours(img=Cn, idx=cnm2.estimates.idx_components, display_numbers=True)
-    #plt.title(Path(args.in_file).stem)
-    #plt.savefig(Path(args.in_file).stem + '.png', dpi=400)
+    Cn = cm.local_correlations(images, swap_dim=False)
+    Cn[np.isnan(Cn)] = 0
+    cnm2.estimates.plot_contours(img=Cn, idx=cnm2.estimates.idx_components, display_numbers=True)
+    plt.title(Path(args.in_file).stem)
+    plt.savefig(Path(args.in_file).stem + '.png', dpi=400)
 
-    #Using Path we get the base name of the video and use the same name for H5
-    sname = Path(args.in_file).stem + '.hdf5'
-    cnm2.save(sname)
+    cnm2.estimates.Cn = Cn
+    cnm2.save(cnm2.mmap_file[:-4] + 'hdf5')
 
 
     #%% STOP CLUSTER and clean up log files
