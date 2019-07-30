@@ -7,6 +7,8 @@ dependencies:
 - cython
 - future
 - h5py
+- imageio
+- imageio-ffmpeg
 - ipykernel=4.10
 - ipython
 - ipyparallel

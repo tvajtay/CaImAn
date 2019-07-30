@@ -748,7 +748,7 @@ class CNMFParams(object):
             T = get_file_size(self.data['fnames'], var_name_hdf5=self.data['var_name_hdf5'])[1]
             if len(self.data['fnames']) > 1:
                 T = T[0]
-            num_splits = T//max(self.motion['num_frames_split'],10)
+            num_splits = T//max(self.motion['num_frames_split'], 10)
             self.motion['splits_els'] = num_splits
             self.motion['splits_rig'] = num_splits
             self.online['movie_name_online'] = os.path.join(os.path.dirname(self.data['fnames'][0]), self.online['movie_name_online'])
@@ -771,7 +771,7 @@ class CNMFParams(object):
             logging.warning("gnb=-1, hence setting key update_background_components " +
                             "in group spatial automatically to False.")
             self.set('spatial', {'update_background_components': False})
-        if method_init=='corr_pnr' and ring_size_factor is not None:
+        if method_init == 'corr_pnr' and ring_size_factor is not None:
             logging.warning("using CNMF-E's ringmodel for background hence setting key " +
                             "normalize_init in group init automatically to False.")
             self.set('init', {'normalize_init': False})
