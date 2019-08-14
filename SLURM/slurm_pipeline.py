@@ -107,7 +107,7 @@ def main():
     mc.motion_correct(save_movie=True)
 
 # %% MEMORY MAPPING
-    border_to_0 = 0 if mc.border_nan is 'copy' else mc.border_to_0
+    border_to_0 = 40 if mc.border_nan is 'copy' else mc.border_to_0
     # you can include the boundaries of the FOV if you used the 'copy' option
     # during motion correction, although be careful about the components near
     # the boundaries
@@ -130,10 +130,10 @@ def main():
     p = 1                    # order of the autoregressive system
     gnb = 2                  # number of global background components
     merge_thr = 0.85         # merging threshold, max correlation allowed
-    rf = 15                  # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
+    rf = 20                  # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
     stride_cnmf = 6          # amount of overlap between the patches in pixels
     K = 4                    # number of components per patch
-    gSig = [5, 5]            # expected half size of neurons in pixels
+    gSig = [7, 7]            # expected half size of neurons in pixels
     method_init = 'greedy_roi'   # initialization method (if analyzing dendritic data using 'sparse_nmf')
     ssub = 2                     # spatial subsampling during initialization
     tsub = 2                     # temporal subsampling during intialization
