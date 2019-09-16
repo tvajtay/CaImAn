@@ -1,17 +1,18 @@
 import logging
 import os
-import subprocess
 import numpy as np
 import scipy
 from scipy.ndimage.morphology import generate_binary_structure, iterate_structure
 
+import caiman.utils.utils
 from ...paths import caiman_datadir
 from .utilities import dict_compare, get_file_size
 
 from pprint import pformat
 
 class CNMFParams(object):
-
+    """Class for setting and changing the various parameters."""
+    
     def __init__(self, fnames=None, dims=None, dxy=(1, 1),
                  border_pix=0, del_duplicates=False, low_rank_background=True,
                  memory_fact=1, n_processes=1, nb_patch=1, p_ssub=2, p_tsub=2,
@@ -67,6 +68,18 @@ class CNMFParams(object):
             var_name_hdf5: str, default: 'mov'
                 if loading from hdf5 name of the variable to load
 
+            caiman_version: str
+                version of CaImAn being used
+
+            last_commit: str
+                hash of last commit in the caiman repo
+
+            mmap_F: list[str]
+                paths to F-order memory mapped files after motion correction
+
+            mmap_C: str
+                path to C-order memory mapped file after motion correction
+
         PATCH PARAMS (CNMFParams.patch)######
 
             rf: int or None, default: None
@@ -92,6 +105,9 @@ class CNMFParams(object):
 
             only_init: bool, default: True
                 whether to run only the initialization
+
+            p_patch: int, default: 0
+                order of AR dynamics when processing within a patch
 
             skip_refinement: bool, default: False
                 Whether to skip refinement of components (deprecated?)
@@ -507,6 +523,9 @@ class CNMFParams(object):
             gSig_filt: int or None, default: None
                 size of kernel for high pass spatial filtering in 1p data. If None no spatial filtering is performed
 
+            is3D: bool, default: False
+                flag for 3D recordings for motion correction
+
             max_deviation_rigid: int, default: 3
                 maximum deviation in pixels between rigid shifts and shifts of individual patches
 
@@ -560,8 +579,10 @@ class CNMFParams(object):
             'decay_time': decay_time,
             'dxy': dxy,
             'var_name_hdf5': var_name_hdf5,
-            'caiman_version': '1.5.3',
+            'caiman_version': '1.6.2',
             'last_commit': None,
+            'mmap_F': None,
+            'mmap_C': None
         }
 
         self.patch = {
@@ -573,6 +594,7 @@ class CNMFParams(object):
             'n_processes': n_processes,
             'nb_patch': nb_patch,
             'only_init': only_init_patch,
+            'p_patch': 0,                 # AR order within patch
             'remove_very_bad_comps': remove_very_bad_comps,
             'rf': rf,
             'skip_refinement': False,
@@ -601,7 +623,7 @@ class CNMFParams(object):
             'SC_kernel': 'heat',         # kernel for graph affinity matrix
             'SC_sigma' : 1,              # std for SC kernel
             'SC_thr': 0,                 # threshold for affinity matrix
-            'SC_normalize': True,        # standardize entries prior to 
+            'SC_normalize': True,        # standardize entries prior to
                                          # computing affinity matrix
             'SC_use_NN': False,          # sparsify affinity matrix by using
                                          # only nearest neighbors
@@ -613,7 +635,7 @@ class CNMFParams(object):
             'gSiz': gSiz,
             'init_iter': init_iter,
             'kernel': None,           # user specified template for greedyROI
-            'lambda_gnmf' :1,         # regularization weight for graph NMF  
+            'lambda_gnmf' :1,         # regularization weight for graph NMF
             'maxIter': 5,             # number of HALS iterations
             'max_iter_snmf': 500,
             'method_init': method_init,    # can be greedy_roi, greedy_pnr sparse_nmf, local_NMF
@@ -654,8 +676,8 @@ class CNMFParams(object):
             'normalize_yyt_one': True,
             'nrgthr': 0.9999,                # Energy threshold
             'num_blocks_per_run_spat': num_blocks_per_run_spat, # number of process to parallelize residual computation ** DECREASE IF MEMORY ISSUES
-            'se': None,                      # Morphological closing structuring element
-            'ss': None,                      # Binary element for determining connectivity
+            'se': np.ones((3, 3), dtype='uint8'),  # Morphological closing structuring element
+            'ss': np.ones((3, 3), dtype='uint8'),  # Binary element for determining connectivity
             'thr_method': 'nrg',             # Method of thresholding ('max' or 'nrg')
             # whether to update the background components in the spatial phase
             'update_background_components': update_background_components,
@@ -748,8 +770,9 @@ class CNMFParams(object):
         }
 
         self.motion = {
-            'border_nan': 'copy',                 # flag for allowing NaN in the boundaries
+            'border_nan': 'copy',               # flag for allowing NaN in the boundaries
             'gSig_filt': None,                  # size of kernel for high pass spatial filtering in 1p data
+            'is3D': False,                      # flag for 3D recordings for motion correction
             'max_deviation_rigid': 3,           # maximum deviation between rigid and non-rigid
             'max_shifts': (6, 6),               # maximum shifts per dimension (in pixels)
             'min_mov': None,                    # minimum value of movie
@@ -769,17 +792,16 @@ class CNMFParams(object):
         }
 
         self.change_params(params_dict)
-        try:
-            lc = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").split("\n")[0]
-            self.data['last_commit'] = lc
-        except:  #subprocess.CalledProcessError:
-            pass
+        self.data['last_commit'] = '-'.join(caiman.utils.utils.get_caiman_version())
         if self.data['dims'] is None and self.data['fnames'] is not None:
             self.data['dims'] = get_file_size(self.data['fnames'], var_name_hdf5=self.data['var_name_hdf5'])[0]
         if self.data['fnames'] is not None:
             if isinstance(self.data['fnames'], str):
                 self.data['fnames'] = [self.data['fnames']]
-            T = get_file_size(self.data['fnames'], var_name_hdf5=self.data['var_name_hdf5'])[1]
+            if self.motion['is3D']:
+                T = get_file_size(self.data['fnames'], var_name_hdf5=self.data['var_name_hdf5'])[0][0]
+            else:
+                T = get_file_size(self.data['fnames'], var_name_hdf5=self.data['var_name_hdf5'])[1]
             if len(self.data['fnames']) > 1:
                 T = T[0]
             num_splits = T//max(self.motion['num_frames_split'], 10)
@@ -796,6 +818,7 @@ class CNMFParams(object):
             self.init['gSig'] = [-1, -1]
         if self.init['gSiz'] is None:
             self.init['gSiz'] = [2*gs + 1 for gs in self.init['gSig']]
+        self.init['gSiz'] = [gz if gz % 2 else gz + 1 for gz in self.init['gSiz']]
 
         if gnb <= 0:
             logging.warning("gnb={0}, hence setting keys nb_patch and low_rank_background ".format(gnb) +
@@ -887,6 +910,8 @@ class CNMFParams(object):
         return True
 
     def to_dict(self):
+        """Returns the params class as a dictionary with subdictionaries for each
+        catergory."""
         return {'data': self.data, 'spatial_params': self.spatial, 'temporal_params': self.temporal,
                 'init_params': self.init, 'preprocess_params': self.preprocess,
                 'patch_params': self.patch, 'online': self.online, 'quality': self.quality,
@@ -903,6 +928,14 @@ class CNMFParams(object):
         return 'CNMFParams:\n\n' + '\n\n'.join(formatted_outputs)
 
     def change_params(self, params_dict, verbose=False):
+        """ Method for updating the params object by providing a single dictionary.
+        For each key in the provided dictionary the method will search in all
+        subdictionaries and will update the value if it finds a match.
+
+        Args:
+            params_dict: dictionary with parameters to be changed and new values
+            verbose: bool (False). Print message for all keys
+        """
         for gr in list(self.__dict__.keys()):
             self.set(gr, params_dict, verbose=verbose)
         for k, v in params_dict.items():
