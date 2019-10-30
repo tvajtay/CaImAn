@@ -132,12 +132,12 @@ def main():
     merge_thr = 0.85         # merging threshold, max correlation allowed
     rf = 20                  # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
     stride_cnmf = 6          # amount of overlap between the patches in pixels
-    K = 4                    # number of components per patch
+    K = 3                    # number of components per patch
     gSig = [7, 7]            # expected half size of neurons in pixels
     method_init = 'greedy_roi'   # initialization method (if analyzing dendritic data using 'sparse_nmf')
     ssub = 2                     # spatial subsampling during initialization
     tsub = 2                     # temporal subsampling during intialization
-    s_min = -100                   # minimum signal amplitude needed in order for a transient to be considered as activity
+    s_min = -20                   # minimum signal amplitude needed in order for a transient to be considered as activity
 
     # parameters for component evaluation
     opts_dict = {'fnames': fnames,
@@ -183,7 +183,7 @@ def main():
     min_SNR = 2  # Overall minimum signal to noise ratio for accepting a component
     rval_thr = 0.85  # space correlation threshold for accepting a component
     cnn_thr = 0.99  # threshold for CNN based classifier
-    cnn_lowest = 0.2 # neurons with cnn probability lower than this value are rejected
+    cnn_lowest = 0.15 # neurons with cnn probability lower than this value are rejected
     min_size_neuro = 0.1*gSig[0]*np.pi**2
     max_size_neuro = 2.5*gSig[0]*np.pi**2
 
