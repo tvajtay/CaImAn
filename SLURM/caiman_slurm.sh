@@ -30,7 +30,7 @@ export OPENBLAS_NUM_THREADS=1
 #then we "execdir" within "find" so that on each file it finds it runs the caiman pipeline and saves
 #the data back in its respective directory, "{}" represents the filename to be loaded.
 #'slurm_pipeline.py' takes a single CLI argument which is the file to be analyzed.
-find -type f -name *.tif -execdir python /home/tjv55/slurm_pipeline.py {} \;
+find -type d -execdir python /home/tjv55/slurm_pipeline.py {} \;
 
 #The following would be the variation of the previous command if you didn't want to include
 #the parent directory itself and search just the sub-directories.

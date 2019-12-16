@@ -20,23 +20,23 @@ a AVI of the denoised components.
 @tvajtay
 """
 
-
-from pathlib import Path
-import argparse
+#%%
 import numpy as np
 import imageio
+import os
 import cv2
+from os.path import isfile, join
 from caiman.motion_correction import MotionCorrect
 from caiman.source_extraction.cnmf import cnmf
 from caiman.source_extraction.cnmf import params
+from pathlib import Path
 import caiman as cm
 
+#%%
+#Need to search executed directory for files
+fnames = [f for f in os.listdir(os.getcwd()) if isfile(join(os.getcwd(), f)) and f[-4:] in ['.tif','.sbx','.tf8','.btf']]
 
-#Set up argparse to take filename as CLI argument and then store as the 'in_file' component of args
-parser = argparse.ArgumentParser(description='Video filename and location')
-parser.add_argument('in_file', type=str, help='Input file name')
-args = parser.parse_args()
-
+#%%
 try:
     cv2.setNumThreads(0)
 except:
@@ -62,8 +62,8 @@ def main():
 
     # dataset dependent parameters
     fr = 15.49             # imaging rate in frames per second
-    decay_time = 0.4    # length of a typical transient in seconds
-    dxy = (1.5, 1.5)      # spatial resolution in x and y in (um per pixel)
+    decay_time = 0.9    # length of a typical transient in seconds
+    dxy = (1.4, 1.4)      # spatial resolution in x and y in (um per pixel)
     # note the lower than usual spatial resolution here
     max_shift_um = (12., 12.)       # maximum shift in um
     patch_motion_um = (100., 100.)  # patch size for non-rigid correction in um
@@ -107,7 +107,7 @@ def main():
     mc.motion_correct(save_movie=True)
 
 # %% MEMORY MAPPING
-    border_to_0 = 40 if mc.border_nan is 'copy' else mc.border_to_0
+    border_to_0 = 0 if mc.border_nan is 'copy' else mc.border_to_0
     # you can include the boundaries of the FOV if you used the 'copy' option
     # during motion correction, although be careful about the components near
     # the boundaries
@@ -128,7 +128,7 @@ def main():
 
 # %%  parameters for source extraction and deconvolution
     p = 1                    # order of the autoregressive system
-    gnb = 2                  # number of global background components
+    gnb = 3                  # number of global background components
     merge_thr = 0.85         # merging threshold, max correlation allowed
     rf = 20                  # half-size of the patches in pixels. e.g., if rf=25, patches are 50x50
     stride_cnmf = 6          # amount of overlap between the patches in pixels
