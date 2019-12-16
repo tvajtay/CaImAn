@@ -34,8 +34,7 @@ import caiman as cm
 
 #%%
 #Need to search executed directory for files
-fnames = [f for f in os.listdir(os.getcwd()) if isfile(join(os.getcwd(), f)) and f[-4:] in ['.tif','.sbx','.tf8','.btf']]
-
+fnames = sorted([f for f in os.listdir(os.getcwd()) if isfile(join(os.getcwd(), f)) and f[-4:] in ['.tif','.sbx','.tf8','.btf']])
 #%%
 try:
     cv2.setNumThreads(0)
@@ -54,10 +53,6 @@ except NameError:
 
 #%%
 def main():
-
-#%% Select file from input arguments
-    fnames = args.in_file  # filename to be processed from argparse
-
 #%% First setup some parameters for data and motion correction
 
     # dataset dependent parameters
