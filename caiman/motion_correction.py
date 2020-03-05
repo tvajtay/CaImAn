@@ -95,7 +95,7 @@ class MotionCorrect(object):
        """
 
     def __init__(self, fname, min_mov=None, dview=None, max_shifts=(6, 6), niter_rig=1, splits_rig=14, num_splits_to_process_rig=None,
-                 strides=(96, 96), overlaps=(32, 32), splits_els=14, num_splits_to_process_els=[7, None],
+                 strides=(96, 96), overlaps=(32, 32), splits_els=14, num_splits_to_process_els=None,
                  upsample_factor_grid=4, max_deviation_rigid=3, shifts_opencv=True, nonneg_movie=True, gSig_filt=None,
                  use_cuda=False, border_nan=True, pw_rigid=False, num_frames_split=80, var_name_hdf5='mov',is3D=False,
                  indices=(slice(None), slice(None))):
@@ -122,7 +122,7 @@ class MotionCorrect(object):
            splits_rig': int
             for parallelization split the movies in  num_splits chuncks across time
 
-           num_splits_to_process_rig:list,
+           num_splits_to_process_rig: list,
                if none all the splits are processed and the movie is saved, otherwise at each iteration
                num_splits_to_process_rig are considered
 
@@ -138,7 +138,7 @@ class MotionCorrect(object):
            splits_els':list
                for parallelization split the movies in  num_splits chuncks across time
 
-           num_splits_to_process_els:list,
+           num_splits_to_process_els: list,
                if none all the splits are processed and the movie is saved  otherwise at each iteration
                 num_splits_to_process_els are considered
 
@@ -354,23 +354,22 @@ class MotionCorrect(object):
 
         self.coord_shifts_els:List = []
         for name_cur in self.fname:
-            for num_splits_to_process in self.num_splits_to_process_els:
-                _fname_tot_els, new_template_els, _templates_els,\
-                    _x_shifts_els, _y_shifts_els, _z_shifts_els, _coord_shifts_els = motion_correct_batch_pwrigid(
-                        name_cur, self.max_shifts, self.strides, self.overlaps, -self.min_mov,
-                        dview=self.dview, upsample_factor_grid=self.upsample_factor_grid,
-                        max_deviation_rigid=self.max_deviation_rigid, splits=self.splits_els,
-                        num_splits_to_process=num_splits_to_process, num_iter=num_iter, template=self.total_template_els,
-                        shifts_opencv=self.shifts_opencv, save_movie=save_movie, nonneg_movie=self.nonneg_movie, gSig_filt=self.gSig_filt,
-                        use_cuda=self.use_cuda, border_nan=self.border_nan, var_name_hdf5=self.var_name_hdf5, is3D=self.is3D,
-                        indices=self.indices)
-                if not self.is3D:
-                    if show_template:
-                        pl.imshow(new_template_els)
-                        pl.pause(.5)
-                if np.isnan(np.sum(new_template_els)):
-                    raise Exception(
-                        'Template contains NaNs, something went wrong. Reconsider the parameters')
+            _fname_tot_els, new_template_els, _templates_els,\
+                _x_shifts_els, _y_shifts_els, _z_shifts_els, _coord_shifts_els = motion_correct_batch_pwrigid(
+                    name_cur, self.max_shifts, self.strides, self.overlaps, -self.min_mov,
+                    dview=self.dview, upsample_factor_grid=self.upsample_factor_grid,
+                    max_deviation_rigid=self.max_deviation_rigid, splits=self.splits_els,
+                    num_splits_to_process=None, num_iter=num_iter, template=self.total_template_els,
+                    shifts_opencv=self.shifts_opencv, save_movie=save_movie, nonneg_movie=self.nonneg_movie, gSig_filt=self.gSig_filt,
+                    use_cuda=self.use_cuda, border_nan=self.border_nan, var_name_hdf5=self.var_name_hdf5, is3D=self.is3D,
+                    indices=self.indices)
+            if not self.is3D:
+                if show_template:
+                    pl.imshow(new_template_els)
+                    pl.pause(.5)
+            if np.isnan(np.sum(new_template_els)):
+                raise Exception(
+                    'Template contains NaNs, something went wrong. Reconsider the parameters')
 
             if template is None:
                 self.total_template_els = new_template_els
@@ -2707,10 +2706,15 @@ def motion_correct_batch_rigid(fname, max_shifts, dview=None, splits=56, num_spl
             save_movie = save_movie_rigid
             logging.debug('saving!')
 
+
+        if isinstance(fname, tuple):
+            base_name=os.path.split(fname[0])[-1][:-4] + '_rig_'
+        else:
+            base_name=os.path.split(fname)[-1][:-4] + '_rig_'
+
         fname_tot_rig, res_rig = motion_correction_piecewise(fname, splits, strides=None, overlaps=None,
                                                              add_to_movie=add_to_movie, template=old_templ, max_shifts=max_shifts, max_deviation_rigid=0,
-                                                             dview=dview, save_movie=save_movie, base_name=os.path.split(
-                                                                 fname)[-1][:-4] + '_rig_', subidx = subidx,
+                                                             dview=dview, save_movie=save_movie, base_name=base_name, subidx = subidx,
                                                              num_splits=num_splits_to_process, shifts_opencv=shifts_opencv, nonneg_movie=nonneg_movie, gSig_filt=gSig_filt,
                                                              use_cuda=use_cuda, border_nan=border_nan, var_name_hdf5=var_name_hdf5, is3D=is3D,
                                                              indices=indices)
@@ -2827,14 +2831,23 @@ def motion_correct_batch_pwrigid(fname, max_shifts, strides, overlaps, add_to_mo
         if iter_ == num_iter - 1:
             save_movie = save_movie
             if save_movie:
-                logging.debug('saving mmap of ' + fname)
+
+                if isinstance(fname, tuple):
+                    logging.debug(f'saving mmap of {fname[0]} to {fname[-1]}')
+                else:
+                    logging.debug(f'saving mmap of {fname}')
+
+        if isinstance(fname, tuple):
+            base_name=os.path.split(fname[0])[-1][:-4] + '_els_'
+        else:
+            base_name=os.path.split(fname)[-1][:-4] + '_els_'
 
         fname_tot_els, res_el = motion_correction_piecewise(fname, splits, strides, overlaps,
                                                             add_to_movie=add_to_movie, template=old_templ, max_shifts=max_shifts,
                                                             max_deviation_rigid=max_deviation_rigid,
                                                             newoverlaps=newoverlaps, newstrides=newstrides,
                                                             upsample_factor_grid=upsample_factor_grid, order='F', dview=dview, save_movie=save_movie,
-                                                            base_name=os.path.split(fname)[-1][:-4] + '_els_', num_splits=num_splits_to_process,
+                                                            base_name=base_name, num_splits=num_splits_to_process,
                                                             shifts_opencv=shifts_opencv, nonneg_movie=nonneg_movie, gSig_filt=gSig_filt,
                                                             use_cuda=use_cuda, border_nan=border_nan, var_name_hdf5=var_name_hdf5, is3D=is3D,
                                                             indices=indices)
@@ -2894,13 +2907,16 @@ def tile_and_correct_wrapper(params):
         shifts_opencv, nonneg_movie, gSig_filt, is_fiji, use_cuda, border_nan, var_name_hdf5, \
         is3D, indices = params
 
-    name, extension = os.path.splitext(img_name)[:2]
+
+    if isinstance(img_name,tuple):
+        name, extension = os.path.splitext(img_name[0])[:2]
+    else:
+        name, extension = os.path.splitext(img_name)[:2]
     extension = extension.lower()
     shift_info = []
 
     imgs = cm.load(img_name, subindices=idxs, var_name_hdf5=var_name_hdf5,is3D=is3D)
     imgs = imgs[(slice(None),) + indices]
-        
     mc = np.zeros(imgs.shape, dtype=np.float32)
     if not imgs[0].shape == template.shape:
         template = template[indices]
@@ -2908,7 +2924,7 @@ def tile_and_correct_wrapper(params):
         if count % 10 == 0:
             logging.debug(count)
         if is3D:
-            mc[count], total_shift, start_step, xyz_grid = tile_and_correct_3d(img[indices], template, strides, overlaps, max_shifts,
+            mc[count], total_shift, start_step, xyz_grid = tile_and_correct_3d(img, template, strides, overlaps, max_shifts,
                                                                        add_to_movie=add_to_movie, newoverlaps=newoverlaps,
                                                                        newstrides=newstrides,
                                                                        upsample_factor_grid=upsample_factor_grid,
@@ -2952,14 +2968,17 @@ def motion_correction_piecewise(fname, splits, strides, overlaps, add_to_movie=0
 
     """
     # todo todocument
-    name, extension = os.path.splitext(fname)[:2]
+    if isinstance(fname,tuple):
+        name, extension = os.path.splitext(fname[0])[:2]
+    else:
+        name, extension = os.path.splitext(fname)[:2]
     extension = extension.lower()
     is_fiji = False
 
     dims, T = cm.source_extraction.cnmf.utilities.get_file_size(fname, var_name_hdf5=var_name_hdf5)
     z = np.zeros(dims)
     dims = z[indices].shape
-
+    logging.debug('Number of Splits: {}'.format(splits))
     if type(splits) is int:
         if subidx is None:
             rng = range(T)
@@ -2979,7 +2998,6 @@ def motion_correction_piecewise(fname, splits, strides, overlaps, add_to_movie=0
 #        shape_mov = (d1 * d2 * d3, T)
 #    else:
 #        shape_mov = (d1 * d2, T)
-
     if num_splits is not None:
         idxs = np.array(idxs)[np.random.randint(0, len(idxs), num_splits)]
         save_movie = False
@@ -2989,7 +3007,11 @@ def motion_correction_piecewise(fname, splits, strides, overlaps, add_to_movie=0
         if base_name is None:
             base_name = os.path.split(fname)[1][:-4]
         fname_tot:Optional[str] = memmap_frames_filename(base_name, dims, T, order)
-        fname_tot = os.path.join(os.path.split(fname)[0], fname_tot)
+        if isinstance(fname,tuple):
+            fname_tot = os.path.join(os.path.split(fname[0])[0], fname_tot)
+        else:
+            fname_tot = os.path.join(os.path.split(fname)[0], fname_tot)
+
         np.memmap(fname_tot, mode='w+', dtype=np.float32,
                   shape=prepare_shape(shape_mov), order=order)
         logging.info('Saving file as {}'.format(fname_tot))
@@ -2998,6 +3020,7 @@ def motion_correction_piecewise(fname, splits, strides, overlaps, add_to_movie=0
 
     pars = []
     for idx in idxs:
+        logging.debug('Processing: frames: {}'.format(idx))
         pars.append([fname, fname_tot, idx, shape_mov, template, strides, overlaps, max_shifts, np.array(
             add_to_movie, dtype=np.float32), max_deviation_rigid, upsample_factor_grid,
             newoverlaps, newstrides, shifts_opencv, nonneg_movie, gSig_filt, is_fiji,

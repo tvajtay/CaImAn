@@ -30,7 +30,7 @@ from scipy.ndimage.filters import correlate
 import scipy.sparse as spr
 from skimage.morphology import disk
 from sklearn.decomposition import NMF, FastICA
-from sklearn.utils.extmath import randomized_svd, squared_norm
+from sklearn.utils.extmath import randomized_svd, squared_norm, randomized_range_finder
 import sys
 from typing import List
 
@@ -40,7 +40,7 @@ from .deconvolution import constrained_foopsi
 from .pre_processing import get_noise_fft, get_noise_welch
 from .spatial import circular_constraint, connectivity_constraint
 from ...utils.utils import parmap
-from ...utils.stats import pd_solve
+from ...utils.stats import pd_solve, compressive_nmf
 
 try:
     cv2.setNumThreads(0)
@@ -597,7 +597,7 @@ def sparseNMF(Y_ds, nr, max_iter_snmf=500, alpha=10e2, sigma_smooth=(.5, .5, .5)
 
 
 def compressedNMF(Y_ds, nr, r_ov=10, max_iter_snmf=500,
-                  sigma_smooth=(.5, .5, .5), remove_baseline=True,
+                  sigma_smooth=(.5, .5, .5), remove_baseline=False,
                   perc_baseline=20, nb=1, truncate=2, tol=1e-3):
     m = scipy.ndimage.gaussian_filter(np.transpose(
             Y_ds, np.roll(np.arange(Y_ds.ndim), 1)), sigma=sigma_smooth,
@@ -605,29 +605,38 @@ def compressedNMF(Y_ds, nr, r_ov=10, max_iter_snmf=500,
     if remove_baseline:
         logging.info('REMOVING BASELINE')
         bl = np.percentile(m, perc_baseline, axis=0)
-        m1 = np.maximum(0, m - bl)
+        m = np.maximum(0, m - bl)
     else:
         logging.info('NOT REMOVING BASELINE')
         bl = np.zeros(m.shape[1:])
-        m1 = m
 
-    T, dims = m1.shape[0], m1.shape[1:]
+    T, dims = m.shape[0], m.shape[1:]
     d = np.prod(dims)
-    yr = np.reshape(m1, [T, d], order='F')
-
+    yr = np.reshape(m, [T, d], order='F')
+#    L = randomized_range_finder(yr, nr + r_ov, 3)
+#    R = randomized_range_finder(yr.T, nr + r_ov, 3)
+#    Yt = L.T.dot(yr).dot(R)
+#    c_in, a_in = compressive_nmf(Yt, L, R.T, nr)
+#    C_in = L.dot(c_in)
+#    A_in = a_in.dot(R.T)
+#    A_in = A_in.T
+#    C_in = C_in.T
+    A, C, USV = nnsvd_init(yr, nr, r_ov=r_ov)
     W_r = np.random.randn(d, nr + r_ov)
     W_l = np.random.randn(T, nr + r_ov)
-    YYt = yr.dot(yr.T)
+    US = USV[0]*USV[1]
+    YYt = US.dot(USV[2].dot(USV[2].T)).dot(US.T)
+#    YYt = yr.dot(yr.T)
 
-    B = YYt.dot(YYt.dot(yr.dot(W_r)))
+    B = YYt.dot(YYt.dot(US.dot(USV[2].dot(W_r))))
     PC, _ = np.linalg.qr(B)
 
-    B = yr.T.dot(YYt.dot(YYt.dot(W_l)))
+    B = USV[2].T.dot(US.T.dot(YYt.dot(YYt.dot(W_l))))
     PA, _ = np.linalg.qr(B)
-    mdl = NMF(n_components=nr, verbose=False, init='nndsvd', tol=1e-10,
-              max_iter=1)
-    C = mdl.fit_transform(yr).T
-    A = mdl.components_.T
+#    mdl = NMF(n_components=nr, verbose=False, init='nndsvd', tol=1e-10,
+#              max_iter=1)
+#    C = mdl.fit_transform(yr).T
+#    A = mdl.components_.T
 
     yrPA = yr.dot(PA)
     yrPC = PC.T.dot(yr)
@@ -1824,9 +1833,9 @@ def compute_W(Y, A, C, dims, radius, data_fits_in_memory=True, ssub=1, tsub=1, p
     return spr.csr_matrix((data, indices, indptr), dtype='float32'), b0.astype(np.float32)
 
 #%%
-def nnsvd_init(X,n_components,eps=1e-6,random_state=None):
-    # NNDSVD initialization from scikit learn package
-    U, S, V = randomized_svd(X, n_components, random_state=random_state)
+def nnsvd_init(X, n_components, r_ov=10, eps=1e-6, random_state=42):
+    # NNDSVD initialization from scikit learn package (modified)
+    U, S, V = randomized_svd(X, n_components + r_ov, random_state=random_state)
     W, H = np.zeros(U.shape), np.zeros(V.shape)
 
     # The leading singular triplet is non-negative
@@ -1866,7 +1875,7 @@ def nnsvd_init(X,n_components,eps=1e-6,random_state=None):
 
     C = W.T
     A = H.T
-    return A,C #
+    return A[:, 1:n_components], C[:n_components], (U, S, V) #
 #%%
 def norm(x):
     """Dot product-based Euclidean norm implementation

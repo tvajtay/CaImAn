@@ -581,7 +581,49 @@ class CNMFParams(object):
                 flag for using a GPU.
 
             indices: tuple(slice), default: (slice(None), slice(None))
-               Use that to apply motion correction only on a part of the FOV
+                Use that to apply motion correction only on a part of the FOV
+
+        RING CNN PARAMETERS (CNMFParams.ring_CNN)
+
+            n_channels: int, default: 2
+                Number of "ring" kernels
+
+            use_bias: bool, default: False
+                Flag for using bias in the convolutions
+
+            use_add: bool, default: False
+                Flag for using an additive layer
+
+            pct: float between 0 and 1, default: 0.01
+                Quantile used during training with quantile loss function
+
+            patience: int, default: 3
+                Number of epochs to wait before early stopping
+
+            max_epochs: int, default: 100
+                Maximum number of epochs to be used during training
+
+            width: int, default: 5
+                Width of "ring" kernel
+
+            loss_fn: str, default: 'pct'
+                Loss function specification ('pct' for quantile loss function,
+                'mse' for mean squared error)
+
+            lr: float, default: 1e-3
+                (initial) learning rate
+
+            lr_scheduler: function, default: None
+                Learning rate scheduler function
+
+            path_to_model: str, default: None
+                Path to saved weights (if training then path to saved model weights)
+
+            remove_activity: bool, default: False
+                Flag for removing activity of last frame prior to background extraction
+
+            reuse_model: bool, default: False
+                Flag for reusing an already trained model (saved in path to model)
         """
 
         self.data = {
@@ -738,6 +780,8 @@ class CNMFParams(object):
             'rval_lowest': -1,         # minimum accepted space correlation
             'rval_thr': rval_thr,      # space correlation threshold
             'use_cnn': True,           # use CNN based classifier
+            'use_ecc': False,          # flag for eccentricity based filtering
+            'max_ecc': 3
         }
 
         self.online = {
@@ -767,11 +811,13 @@ class CNMFParams(object):
             'opencv_codec': 'H264',            # FourCC video codec for saving movie. Check http://www.fourcc.org/codecs.php
             'path_to_model': os.path.join(caiman_datadir(), 'model',
                                           'cnn_model_online.h5'),
+            'ring_CNN': False,                 # flag for using a ring CNN background model 
             'rval_thr': rval_thr,              # space correlation threshold
             'save_online_movie': False,        # flag for saving online movie
             'show_movie': False,               # display movie online
             'simultaneously': simultaneously,  # demix and deconvolve simultaneously
             'sniper_mode': sniper_mode,        # flag for using CNN
+            'stop_detection': False,           # flag for stop detecting new neurons at the last epoch 
             'test_both': test_both,            # flag for using both CNN and space correlation
             'thresh_CNN_noisy': thresh_CNN_noisy,  # threshold for online CNN classifier
             'thresh_fitness_delta': thresh_fitness_delta,
@@ -795,8 +841,8 @@ class CNMFParams(object):
             'niter_rig': 1,                     # number of iterations rigid motion correction
             'nonneg_movie': True,               # flag for producing a non-negative movie
             'num_frames_split': 80,             # split across time every x frames
-            'num_splits_to_process_els': [7, None],
-            'num_splits_to_process_rig': None,
+            'num_splits_to_process_els': None,  # DO NOT MODIFY
+            'num_splits_to_process_rig': None,  # DO NOT MODIFY
             'overlaps': (32, 32),               # overlap between patches in pw-rigid motion correction
             'pw_rigid': False,                  # flag for performing pw-rigid motion correction
             'shifts_opencv': True,              # flag for applying shifts using cubic interpolation (otherwise FFT)
@@ -806,6 +852,22 @@ class CNMFParams(object):
             'upsample_factor_grid': 4,          # motion field upsampling factor during FFT shifts
             'use_cuda': False,                  # flag for using a GPU
             'indices': (slice(None), slice(None))  # part of FOV to be corrected
+        }
+
+        self.ring_CNN = {
+            'n_channels' : 2,                   # number of "ring" kernels   
+            'use_bias' : False,                 # use bias in the convolutions
+            'use_add' : False,                  # use an additive layer
+            'pct' : 0.01,                       # quantile loss specification
+            'patience' : 3,                     # patience for early stopping
+            'max_epochs': 100,                  # maximum number of epochs
+            'width': 5,                         # width of "ring" kernel
+            'loss_fn': 'pct',                   # loss function
+            'lr': 1e-3,                         # (initial) learning rate
+            'lr_scheduler': None,               # learning rate scheduler function
+            'path_to_model': None,              # path to saved weights
+            'remove_activity': False,           # remove activity of last frame prior to background extraction
+            'reuse_model': False                # reuse an already trained model
         }
 
         self.change_params(params_dict)
@@ -826,11 +888,14 @@ class CNMFParams(object):
             else:
                 T = get_file_size(self.data['fnames'], var_name_hdf5=self.data['var_name_hdf5'])[1]
             if len(self.data['fnames']) > 1:
-                T = T[0]
-            num_splits = T//max(self.motion['num_frames_split'], 10)
+                T = T[0]             
+            num_splits = max(T//max(self.motion['num_frames_split'], 10), 1)
             self.motion['splits_els'] = num_splits
             self.motion['splits_rig'] = num_splits
-            self.online['movie_name_online'] = os.path.join(os.path.dirname(self.data['fnames'][0]), self.online['movie_name_online'])
+            if isinstance(self.data['fnames'][0],tuple):
+                self.online['movie_name_online'] = os.path.join(os.path.dirname(self.data['fnames'][0][0]), self.online['movie_name_online'])
+            else:
+                self.online['movie_name_online'] = os.path.join(os.path.dirname(self.data['fnames'][0]), self.online['movie_name_online'])
         if self.online['N_samples_exceptionality'] is None:
             self.online['N_samples_exceptionality'] = np.ceil(self.data['fr'] * self.data['decay_time']).astype('int')
         if self.online['thresh_fitness_raw'] is None:
@@ -862,6 +927,15 @@ class CNMFParams(object):
             logging.warning("using CNMF-E's ringmodel for background hence setting key " +
                             "normalize_init in group init automatically to False.")
             self.set('init', {'normalize_init': False})
+        if self.motion['is3D']:
+            for a in ('indices', 'max_shifts', 'strides', 'overlaps'):
+                if len(self.motion[a]) != 3:
+                    if self.motion[a][0] == self.motion[a][1]:
+                        self.motion[a] = (self.motion[a][0],) * 3
+                        logging.warning("is3D=True, hence setting key " + a +
+                            " automatically to " + str(self.motion[a]))
+                    else:
+                        raise ValueError(a + ' has to be a tuple of length 3 for volumetric 3D data')
 
     def set(self, group, val_dict, set_if_not_exists=False, verbose=False):
         """ Add key-value pairs to a group. Existing key-value pairs will be overwritten
@@ -884,7 +958,7 @@ class CNMFParams(object):
                         "NOT setting value of key {0} in group {1}, because no prior key existed...".format(k, group))
             else:
                 if np.any(d[k] != v):
-                    logging.warning(
+                    logging.info(
                         "Changing key {0} in group {1} from {2} to {3}".format(k, group, d[k], v))
                 d[k] = v
 
@@ -945,7 +1019,7 @@ class CNMFParams(object):
         return {'data': self.data, 'spatial_params': self.spatial, 'temporal_params': self.temporal,
                 'init_params': self.init, 'preprocess_params': self.preprocess,
                 'patch_params': self.patch, 'online': self.online, 'quality': self.quality,
-                'merging': self.merging, 'motion': self.motion
+                'merging': self.merging, 'motion': self.motion, 'ring_CNN': self.ring_CNN
                 }
 
     def __repr__(self):

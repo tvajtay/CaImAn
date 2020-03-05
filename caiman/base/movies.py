@@ -16,6 +16,7 @@ from builtins import range
 from past.utils import old_div
 
 import cv2
+from functools import partial
 import h5py
 import logging
 from matplotlib import animation
@@ -570,8 +571,49 @@ class movie(ts.timeseries):
         """
         t, h, w = self.shape
         self[:, :, :] = self[crop_begin:t - crop_end, crop_top:h - crop_bottom, crop_left:w - crop_right]
+    
+    def removeBL(self, windowSize:int=100, quantilMin:int=8, in_place:bool=False, returnBL:bool=False):                   
+        """
+        Remove baseline from movie using percentiles over a window
+        Args:
+            windowSize: int
+                window size over which to compute the baseline (the larger the faster the algorithm and the less granular
 
-    def computeDFF(self, secsWindow: int = 5, quantilMin: int = 8, method: str = 'only_baseline',
+            quantilMin: float
+                percentil to be used as baseline value
+            in_place: bool
+                update movie in place
+            returnBL:
+                return only baseline
+
+        Return:
+             movie without baseline or baseline itself (returnBL=True)
+        """
+        pixs = self.to2DPixelxTime()
+        iter_win = rolling_window(pixs,windowSize,windowSize)
+        myperc = partial(np.percentile, q=quantilMin, axis=-1)
+        res = np.array(list(map(myperc,iter_win))).T
+        if returnBL:
+                return cm.movie(cv2.resize(res,pixs.shape[::-1]),fr=self.fr).to3DFromPixelxTime(self.shape)           
+        if (not in_place):            
+            return (pixs-cv2.resize(res,pixs.shape[::-1])).to3DFromPixelxTime(self.shape)
+        else:
+            self -= cm.movie(cv2.resize(res,pixs.shape[::-1]),fr=self.fr).to3DFromPixelxTime(self.shape) 
+            return self
+    
+    def to2DPixelxTime(self, order='F'):
+        """
+        Transform 3D movie into 2D
+        """
+        return self.transpose([2,1,0]).reshape((-1,self.shape[0]),order=order)  
+
+    def to3DFromPixelxTime(self, shape, order='F'):
+        """
+            Transform 2D movie into 3D
+        """
+        return to_3D(self,shape[::-1],order=order).transpose([2,1,0])
+    
+    def computeDFF(self, secsWindow: int = 5, quantilMin: int = 8, method: str = 'only_baseline', in_place: bool = False,
                    order: str = 'F') -> Tuple[Any, Any]:
         """
         compute the DFF of the movie or remove baseline
@@ -586,6 +628,8 @@ class movie(ts.timeseries):
 
             method='only_baseline','delta_f_over_f','delta_f_over_sqrt_f'
 
+            in_place: compute baseline in a memory efficient way by updating movie in place
+
         Returns:
             self: DF or DF/F or DF/sqrt(F) movies
 
@@ -594,7 +638,6 @@ class movie(ts.timeseries):
         Raises:
             Exception 'Unknown method'
         """
-
         logging.debug("computing minimum ...")
         sys.stdout.flush()
         if np.min(self) <= 0 and method != 'only_baseline':
@@ -616,9 +659,16 @@ class movie(ts.timeseries):
         #% compute baseline quickly
         logging.debug("binning data ...")
         sys.stdout.flush()
-        movBL = np.reshape(mov_out.copy(),
-                           (downsampfact, int(old_div(numFramesNew, downsampfact)), linePerFrame, pixPerLine),
-                           order=order)
+        
+        if not in_place:
+            movBL = np.reshape(mov_out.copy(),
+                               (downsampfact, int(old_div(numFramesNew, downsampfact)), linePerFrame, pixPerLine),
+                               order=order)
+        else:
+            movBL = np.reshape(mov_out,
+                               (downsampfact, int(old_div(numFramesNew, downsampfact)), linePerFrame, pixPerLine),
+                               order=order)
+            
         movBL = np.percentile(movBL, quantilMin, axis=0)
         logging.debug("interpolating data ...")
         sys.stdout.flush()
@@ -630,15 +680,18 @@ class movie(ts.timeseries):
                                    prefilter=False)
 
         #% compute DF/F
-        if method == 'delta_f_over_sqrt_f':
-            mov_out = old_div((mov_out - movBL), np.sqrt(movBL))
-        elif method == 'delta_f_over_f':
-            mov_out = old_div((mov_out - movBL), movBL)
-        elif method == 'only_baseline':
-            mov_out = (mov_out - movBL)
+        if not in_place:
+            if method == 'delta_f_over_sqrt_f':
+                mov_out = old_div((mov_out - movBL), np.sqrt(movBL))
+            elif method == 'delta_f_over_f':
+                mov_out = old_div((mov_out - movBL), movBL)
+            elif method == 'only_baseline':
+                mov_out = (mov_out - movBL)
+            else:
+                raise Exception('Unknown method')
         else:
-            raise Exception('Unknown method')
-
+            mov_out = movBL
+            
         mov_out = mov_out[padbefore:len(movBL) - padafter, :, :]
         logging.debug('Final Size Movie:' + np.str(self.shape))
         return mov_out, movie(movBL,
@@ -862,26 +915,34 @@ class movie(ts.timeseries):
 
     def local_correlations(self,
                            eight_neighbours: bool = False,
-                           swap_dim: bool = True,
+                           swap_dim: bool = False,
                            frames_per_chunk: int = 1500,
-                           order_mean=1) -> np.ndarray:
-        """Computes the correlation image for the input dataset Y
+                           do_plot: bool = False,
+                           order_mean: int =1) -> np.ndarray:
+        """Computes the correlation image (CI) for the input movie. If the movie has
+        length more than 3000 frames it will automatically compute the max-CI
+        taken over chunks of a user specified length.
 
             Args:
                 self:  np.ndarray (3D or 4D)
                     Input movie data in 3D or 4D format
-    
+
                 eight_neighbours: Boolean
                     Use 8 neighbors if true, and 4 if false for 3D data (default = True)
                     Use 6 neighbors for 4D data, irrespectively
-    
+
                 swap_dim: Boolean
                     True indicates that time is listed in the last axis of Y (matlab format)
-                    and moves it in the front
+                    and moves it in the front (default: False)
 
-                frames_per_chunk: int (undocumented)
+                frames_per_chunk: int
+                    Length of chunks to split the file into (default: 1500)
 
-                order_mean: (undocumented)
+                do_plot: Boolean (False)
+                    Display a plot that updates the CI when computed in chunks
+
+                order_mean: int (1)
+                    Norm used to average correlations over neighborhood (default: 1).
 
             Returns:
                 rho: d1 x d2 [x d3] matrix, cross-correlation with adjacent pixels
@@ -905,8 +966,9 @@ class movie(ts.timeseries):
                                             swap_dim=swap_dim,
                                             order_mean=order_mean)
                 Cn = np.maximum(Cn, rho)
-                pl.imshow(Cn, cmap='gray')
-                pl.pause(.1)
+                if do_plot:
+                    pl.imshow(Cn, cmap='gray')
+                    pl.pause(.1)
 
             logging.debug('number of chunks:' + str(n_chunks - 1) + ' frames: ' +
                           str([(n_chunks - 1) * frames_per_chunk, T]))
@@ -915,8 +977,9 @@ class movie(ts.timeseries):
                                         swap_dim=swap_dim,
                                         order_mean=order_mean)
             Cn = np.maximum(Cn, rho)
-            pl.imshow(Cn, cmap='gray')
-            pl.pause(.1)
+            if do_plot:
+                pl.imshow(Cn, cmap='gray')
+                pl.pause(.1)
 
         return Cn
 
@@ -1428,6 +1491,17 @@ def load(file_name: Union[str, List[str]],
                                 var_name_hdf5=var_name_hdf5,
                                 is3D=is3D)
 
+    elif isinstance(file_name,tuple):
+        print('**** PROCESSING AS SINGLE FRAMES *****')
+        if shape is not None:
+            logging.error('shape not supported for multiple movie input')
+        else:
+            return load_movie_chain(tuple([iidd for iidd in np.array(file_name)[subindices]]),
+                     fr=fr, start_time=start_time,
+                     meta_data=meta_data, subindices=None,
+                     bottom=bottom, top=top, left=left, right=right,
+                     channel = channel, outtype=outtype)
+
     if max(top, bottom, left, right) > 0:
         logging.error('top bottom etc... not supported for single movie input')
 
@@ -1437,6 +1511,14 @@ def load(file_name: Union[str, List[str]],
     if os.path.exists(file_name):
         _, extension = os.path.splitext(file_name)[:2]
         extension = extension.lower()
+        if extension == '.mat':
+            logging.warning('Loading a *.mat file. x- and y- dimensions ' +
+                            'might have been swapped.')
+            byte_stream, file_opened = scipy.io.matlab.mio._open_file(file_name, appendmat=False)
+            mjv, mnv = scipy.io.matlab.mio.get_matfile_version(byte_stream)
+            if mjv == 2:
+                extension = '.h5'
+
         if extension == '.tif' or extension == '.tiff':        # load avi file
             with tifffile.TiffFile(file_name) as tffl:
                 multi_page = True if tffl.series[0].shape[0] > 1 else False
@@ -2031,6 +2113,27 @@ def from_zipfiles_to_movie_lists(zipfile_name: str, max_frames_per_movie: int = 
     return movie_list
 
 
+def rolling_window(ndarr, window_size, stride):   
+        """
+        generates efficient rolling window for running statistics
+        Args:
+            ndarr: ndarray
+                input pixels in format pixels x time
+            window_size: int
+                size of the sliding window
+            stride: int
+                stride of the sliding window
+        Returns:
+                iterator with views of the input array
+                
+        """
+        for i in range(0,ndarr.shape[-1]-window_size-stride+1,stride): 
+            yield ndarr[:,i:np.minimum(i+window_size, ndarr.shape[-1])]
+            
+        if i+stride != ndarr.shape[-1]:
+           yield ndarr[:,i+stride:]
+
+
 def load_iter(file_name, subindices=None, var_name_hdf5: str = 'mov'):
     """
     load iterator over movie from file. Supports a variety of formats. tif, hdf5, avi.
@@ -2073,7 +2176,8 @@ def load_iter(file_name, subindices=None, var_name_hdf5: str = 'mov'):
                         yield frame[..., 0]
                     else:
                         cap.release()
-                        raise StopIteration
+                        return
+                        #raise StopIteration
             else:
                 if type(subindices) is slice:
                     subindices = range(
@@ -2094,10 +2198,13 @@ def load_iter(file_name, subindices=None, var_name_hdf5: str = 'mov'):
                     if ret:
                         yield frame[..., 0]
                     else:
-                        raise StopIteration
+                        return
+                        #raise StopIteration
                 cap.release()
-                raise StopIteration
-        elif extension in ('.hdf5', '.h5'):
+
+                return
+                #raise StopIteration
+        elif extension in ('.hdf5', '.h5', '.mat'):
             with h5py.File(file_name, "r") as f:
                 Y = f.get(var_name_hdf5)
                 if subindices is None:
@@ -2111,8 +2218,10 @@ def load_iter(file_name, subindices=None, var_name_hdf5: str = 'mov'):
                     for ind in subindices:
                         yield Y[ind]
         else:  # fall back to memory inefficient version
-            for y in load(file_name, subindices=subindices):
+            for y in load(file_name, var_name_hdf5=var_name_hdf5,
+                          subindices=subindices):
                 yield y
     else:
         logging.error(f"File request:[{file_name}] not found!")
         raise Exception('File not found!')
+

@@ -1,4 +1,8 @@
+#!/usr/bin/env python
+
 import cv2
+from datetime import datetime
+from dateutil.tz import tzlocal
 import numpy as np
 import pyqtgraph as pg
 import scipy
@@ -7,8 +11,6 @@ from pyqtgraph import FileDialog
 from pyqtgraph.Qt import QtGui
 from pyqtgraph.parametertree import Parameter, ParameterTree
 from scipy.sparse import csc_matrix
-from datetime import datetime
-from dateutil.tz import tzlocal
 
 import caiman as cm
 from caiman.source_extraction.cnmf.cnmf import load_CNMF
@@ -509,7 +511,7 @@ def show_neurons_update():
     nr_index = int(nr_vline.value())
     if nr_index > 0 and nr_index < mov[:,0,0].shape[0]:
         # upper left compoenent scrolls through the raw movie        
-        raw_mov = mov[nr_index,:,:]
+        raw_mov = rotate90(mov[nr_index,:,:], right=True, vector=False)
         raw_mov_scaled = make_color_img(raw_mov, min_max=(min_mov,max_mov))
         img.setImage(raw_mov_scaled, autoLevels=False)
         draw_contours_update(raw_mov_scaled, img)
